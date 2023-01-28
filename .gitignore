@@ -1,7 +1,7 @@
 # History files
 .Rhistory
 .Rapp.history
-.Rproj
+*.Rproj
 
 # Session Data files
 .RData
@@ -37,6 +37,7 @@ vignettes/*.pdf
 *.o
 *.so
 *.a
+*.dll
 
 # OSX
 .DS_Store

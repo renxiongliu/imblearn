@@ -548,7 +548,7 @@ List DCCP_ROC(arma::mat X, arma::vec Y, arma::vec beta_init, double b_init, doub
 {
   int n = X.n_rows;
   int p = X.n_cols;
-  arma::vec only_ones(n, arma::fill::ones);
+  arma::mat only_ones(n, 1, arma::fill::ones);
   arma::mat aug_X = arma::join_rows(X, only_ones);
 
   arma::uvec Y_pos_indicator_u = (Y > 0) * 1.0;
