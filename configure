@@ -1,0 +1,29 @@
+# This script is executed automatically by R when
+# a user installs osqp from the R command line using
+# "R CMD install .". It builds the osqp static Library
+# via cmake so that R can link to it if cmake exists
+# in this system.   Otherwise it will be build via
+# the R Makevars system (e.g. because it is being
+# built on the CRAN build farm)
+
+# terminate on failure
+set -e
+set -x
+
+if [ -x "$(command -v cmake)" ]; then
+
+	echo "-- Trying to build libosqp.a via cmake ..."
+	cd src/osqp_sources
+	mkdir -p build
+	cd build
+	cmake -DR_LANG=TRUE -DCMAKE_INSTALL_PREFIX:PATH=../../ ..
+	cmake --build . --target install
+	cd ..
+	rm -rf build/
+	cd ../../
+
+	echo "-- Built libosqp.a"
+
+else
+	echo "-- cmake is not installed on this system. OSQP library libosqp.a will be built via custom makefile."
+fi

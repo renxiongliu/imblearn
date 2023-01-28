@@ -1,0 +1,13 @@
+Package: imblearn
+Type: Package
+Title: Fast and scalable learning for imbalanced data using 'DCCP' algorithm
+Version: 0.0.1
+Date: 2023-01-18
+Author: Renxiong Liu
+Maintainer: Renxiong Liu <liu.6732@osu.edu>	
+Description: Optimize type I/type II error, recall/precision metrics by fast and scalable methods. 
+Imports: Rcpp (>= 0.12.14)
+LinkingTo: Rcpp, RcppArmadillo
+RoxygenNote: 7.2.3
+NeedsCompilation: yes
+Encoding: UTF-8
