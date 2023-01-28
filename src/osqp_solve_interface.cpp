@@ -9,22 +9,24 @@
 using namespace Rcpp;
 
 void extractMatrixData_new(arma::sp_mat &sm, std::vector<c_int> &iout, std::vector<c_int> &pout, std::vector<c_float> &xout);
-void extractMatrixData(const Rcpp::S4& mat, std::vector<c_int>& iout, std::vector<c_int>& pout, std::vector<c_float>& xout);
-void translateSettings(OSQPSettings* settings, const Rcpp::List& pars);
-void mycleanup (OSQPWorkspace* x);
-S4 toDgCMat(csc*);
+void extractMatrixData(const Rcpp::S4 &mat, std::vector<c_int> &iout, std::vector<c_int> &pout, std::vector<c_float> &xout);
+void translateSettings(OSQPSettings *settings, const Rcpp::List &pars);
+void mycleanup(OSQPWorkspace *x);
+S4 toDgCMat(csc *);
 arma::vec psi(arma::vec z, double k);
 arma::sp_mat convert_to_diag_sp(arma::vec z);
 
-//typedef Rcpp::XPtr<OSQPWorkspace, Rcpp::PreserveStorage, mycleanup> XPtrOsqpWork;
+// typedef Rcpp::XPtr<OSQPWorkspace, Rcpp::PreserveStorage, mycleanup> XPtrOsqpWork;
 
 // predicate for testing if a value is below -OSQP_INFTY
-bool below_osqp_neg_inf (c_float x) {
+bool below_osqp_neg_inf(c_float x)
+{
   return (x < -OSQP_INFTY);
 }
 
 // predicate for testing if a value is above OSQP_INFTY
-bool above_osqp_inf (c_float x) {
+bool above_osqp_inf(c_float x)
+{
   return (x > OSQP_INFTY);
 }
 
@@ -78,13 +80,14 @@ SEXP osqpSetup_new(arma::sp_mat &P, arma::vec &q, arma::sp_mat &A, arma::vec &l,
   return work;
 }
 
-SEXP osqpSetup(const S4& P, const NumericVector& q, const S4& A, const NumericVector& l, const NumericVector& u, const List& pars)
+SEXP osqpSetup(const S4 &P, const NumericVector &q, const S4 &A, const NumericVector &l, const NumericVector &u, const List &pars)
 {
   IntegerVector dimP = P.slot("Dim");
   IntegerVector dimA = A.slot("Dim");
   int n = dimP[0];
   int m = dimA[0];
-  if (n != dimP[1] || n != dimA[1]) stop("bug");
+  if (n != dimP[1] || n != dimA[1])
+    stop("bug");
   std::vector<c_int> A_i, A_p, P_i, P_p;
   std::vector<c_float> A_x, P_x, qvec(q.size()), lvec(l.size()), uvec(u.size());
 
@@ -97,19 +100,19 @@ SEXP osqpSetup(const S4& P, const NumericVector& q, const S4& A, const NumericVe
 
   // Threshold lvec to range [-OSQP_INFTY, OSQP_INFTY]
   std::replace_if(lvec.begin(), lvec.end(), below_osqp_neg_inf, -OSQP_INFTY);
-  std::replace_if(lvec.begin(), lvec.end(), above_osqp_inf, OSQP_INFTY);  
+  std::replace_if(lvec.begin(), lvec.end(), above_osqp_inf, OSQP_INFTY);
 
-  // Threshold uvec to range [-OSQP_INFTY, OSQP_INFTY]  
+  // Threshold uvec to range [-OSQP_INFTY, OSQP_INFTY]
   std::replace_if(uvec.begin(), uvec.end(), below_osqp_neg_inf, -OSQP_INFTY);
-  std::replace_if(uvec.begin(), uvec.end(), above_osqp_inf, OSQP_INFTY);  
+  std::replace_if(uvec.begin(), uvec.end(), above_osqp_inf, OSQP_INFTY);
 
-  std::unique_ptr<OSQPSettings> settings (new OSQPSettings);
+  std::unique_ptr<OSQPSettings> settings(new OSQPSettings);
   osqp_set_default_settings(settings.get());
 
   if (pars.size())
     translateSettings(settings.get(), pars);
 
-  std::unique_ptr<OSQPData> data (new OSQPData);
+  std::unique_ptr<OSQPData> data(new OSQPData);
 
   data->n = static_cast<c_int>(n);
   data->m = static_cast<c_int>(m);
@@ -119,39 +122,36 @@ SEXP osqpSetup(const S4& P, const NumericVector& q, const S4& A, const NumericVe
   data->l = lvec.data();
   data->u = uvec.data();
 
-  OSQPWorkspace* workp;
+  OSQPWorkspace *workp;
   osqp_setup(&workp, data.get(), settings.get());
 
-    Rcpp::XPtr<OSQPWorkspace, Rcpp::PreserveStorage, mycleanup> work(workp);
+  Rcpp::XPtr<OSQPWorkspace, Rcpp::PreserveStorage, mycleanup> work(workp);
 
   return work;
 }
 
-
 List osqpSolve(SEXP workPtr)
 {
-  auto work = as<Rcpp::XPtr<OSQPWorkspace, Rcpp::PreserveStorage, mycleanup> >(workPtr);
+  auto work = as<Rcpp::XPtr<OSQPWorkspace, Rcpp::PreserveStorage, mycleanup>>(workPtr);
   c_int n = work->data->n;
   c_int m = work->data->m;
   c_int res = osqp_solve(work);
 
-
-
   std::string status = work->info->status;
-  List info =  List::create(_("iter") = work->info->iter,
-                      _("status") = status,
-                      _("status_val") = work->info->status_val,
-                      _("status_polish") = work->info->status_polish,
-                      _("obj_val") = work->info->obj_val,
-                      _("pri_res") = work->info->pri_res,
-                      _("dua_res") = work->info->dua_res,
-                      _("setup_time") = work->info->setup_time,
-                      _("solve_time") = work->info->solve_time,
-                      _("update_time") = work->info->update_time,
-                      _("polish_time") = work->info->polish_time,
-                      _("run_time") = work->info->run_time,
-                      _("rho_estimate") = work->info->rho_estimate,
-                      _("rho_updates") = work->info->rho_updates);
+  List info = List::create(_("iter") = work->info->iter,
+                           _("status") = status,
+                           _("status_val") = work->info->status_val,
+                           _("status_polish") = work->info->status_polish,
+                           _("obj_val") = work->info->obj_val,
+                           _("pri_res") = work->info->pri_res,
+                           _("dua_res") = work->info->dua_res,
+                           _("setup_time") = work->info->setup_time,
+                           _("solve_time") = work->info->solve_time,
+                           _("update_time") = work->info->update_time,
+                           _("polish_time") = work->info->polish_time,
+                           _("run_time") = work->info->run_time,
+                           _("rho_estimate") = work->info->rho_estimate,
+                           _("rho_updates") = work->info->rho_updates);
 
   List resl;
   if (res != OSQP_UNSOLVED)
@@ -161,24 +161,26 @@ List osqpSolve(SEXP workPtr)
     NumericVector dx(work->delta_x, work->delta_x + n);
     NumericVector dy(work->delta_y, work->delta_y + m);
     resl = List::create(_("x") = x,
-                       _("y") = y,
-                       _("prim_inf_cert") = dx,
-                       _("dual_inf_cert") = dy,
-                       _("info") = info);
+                        _("y") = y,
+                        _("prim_inf_cert") = dx,
+                        _("dual_inf_cert") = dy,
+                        _("info") = info,
+                        _("status") = 1.0);
   }
   else
     resl = List::create(_("x") = NA_REAL,
                         _("y") = NA_REAL,
                         _("prim_inf_cert") = NA_REAL,
                         _("dual_inf_cert") = NA_REAL,
-                        _("info") = info);
+                        _("info") = info,
+                        _("status") = 0);
 
   return resl;
 }
 
 List osqpGetParams(SEXP workPtr)
 {
-  auto work = as<Rcpp::XPtr<OSQPWorkspace, Rcpp::PreserveStorage, mycleanup> >(workPtr);
+  auto work = as<Rcpp::XPtr<OSQPWorkspace, Rcpp::PreserveStorage, mycleanup>>(workPtr);
   IntegerVector linsys;
   if (work->settings->linsys_solver == QDLDL_SOLVER)
     linsys = IntegerVector::create(_("QDLDL_SOLVER") = work->settings->linsys_solver);
@@ -213,93 +215,94 @@ List osqpGetParams(SEXP workPtr)
   return res;
 }
 
-
-
-
 IntegerVector osqpGetDims(SEXP workPtr)
 {
-  auto work = as<Rcpp::XPtr<OSQPWorkspace, Rcpp::PreserveStorage, mycleanup> >(workPtr);
+  auto work = as<Rcpp::XPtr<OSQPWorkspace, Rcpp::PreserveStorage, mycleanup>>(workPtr);
   auto res = IntegerVector::create(_("n") = work->data->n,
                                    _("m") = work->data->m);
-
 
   return res;
 }
 
 void osqpUpdate(SEXP workPtr,
-    Rcpp::Nullable<NumericVector> q_new,
-    Rcpp::Nullable<NumericVector> l_new,
-    Rcpp::Nullable<NumericVector> u_new,
-    Rcpp::Nullable<NumericVector> Px,
-    Rcpp::Nullable<IntegerVector> Px_idx,
-    Rcpp::Nullable<NumericVector> Ax,
-    Rcpp::Nullable<IntegerVector> Ax_idx)
+                Rcpp::Nullable<NumericVector> q_new,
+                Rcpp::Nullable<NumericVector> l_new,
+                Rcpp::Nullable<NumericVector> u_new,
+                Rcpp::Nullable<NumericVector> Px,
+                Rcpp::Nullable<IntegerVector> Px_idx,
+                Rcpp::Nullable<NumericVector> Ax,
+                Rcpp::Nullable<IntegerVector> Ax_idx)
 {
-  auto work = as<Rcpp::XPtr<OSQPWorkspace, Rcpp::PreserveStorage, mycleanup> >(workPtr);
+  auto work = as<Rcpp::XPtr<OSQPWorkspace, Rcpp::PreserveStorage, mycleanup>>(workPtr);
 
   // Update problem vectors
-  if (q_new.isNotNull()) {
+  if (q_new.isNotNull())
+  {
     osqp_update_lin_cost(work, as<NumericVector>(q_new.get()).begin());
   }
-  if (l_new.isNotNull() && u_new.isNull()) {
+  if (l_new.isNotNull() && u_new.isNull())
+  {
     osqp_update_lower_bound(work, as<NumericVector>(l_new.get()).begin());
   }
-  if (u_new.isNotNull() && l_new.isNull()) {
+  if (u_new.isNotNull() && l_new.isNull())
+  {
     osqp_update_upper_bound(work, as<NumericVector>(u_new.get()).begin());
   }
-  if (u_new.isNotNull() && l_new.isNotNull()) {
+  if (u_new.isNotNull() && l_new.isNotNull())
+  {
     osqp_update_bounds(work,
-        as<NumericVector>(l_new.get()).begin(),
-        as<NumericVector>(u_new.get()).begin());
+                       as<NumericVector>(l_new.get()).begin(),
+                       as<NumericVector>(u_new.get()).begin());
   }
 
-
   // Update problem matrices
-  c_int * Px_idx_ = OSQP_NULL;
+  c_int *Px_idx_ = OSQP_NULL;
   c_int len_Px = 0;
-  c_int * Ax_idx_ = OSQP_NULL;
+  c_int *Ax_idx_ = OSQP_NULL;
   c_int len_Ax = 0;
   // Get which parameters are null
-  if (Px_idx.isNotNull()) {
+  if (Px_idx.isNotNull())
+  {
     Px_idx_ = (c_int *)as<IntegerVector>(Px_idx.get()).begin();
     NumericVector Px_ = Px.get();
     len_Px = Px_.size();
   }
-  if (Ax_idx.isNotNull()) {
+  if (Ax_idx.isNotNull())
+  {
     Ax_idx_ = (c_int *)as<IntegerVector>(Ax_idx.get()).begin();
     NumericVector Ax_ = Ax.get();
     len_Ax = Ax_.size();
   }
   // Only P
-  if (Px.isNotNull() && Ax.isNull()){
-      osqp_update_P(work,
-          as<NumericVector>(Px.get()).begin(),
-          Px_idx_,
-          len_Px);
+  if (Px.isNotNull() && Ax.isNull())
+  {
+    osqp_update_P(work,
+                  as<NumericVector>(Px.get()).begin(),
+                  Px_idx_,
+                  len_Px);
   }
 
   // Only A
-  if (Ax.isNotNull() && Px.isNull()){
-      osqp_update_A(work, as<NumericVector>(Ax.get()).begin(),
-                    Ax_idx_,
-                    len_Ax);
+  if (Ax.isNotNull() && Px.isNull())
+  {
+    osqp_update_A(work, as<NumericVector>(Ax.get()).begin(),
+                  Ax_idx_,
+                  len_Ax);
   }
 
   // Both A and P
-  if (Px.isNotNull() && Ax.isNotNull()){
-      osqp_update_P_A(
-          work,
-          as<NumericVector>(Px.get()).begin(),
-          Px_idx_,
-          len_Px,
-          as<NumericVector>(Ax.get()).begin(),
-          Ax_idx_,
-          len_Ax);
+  if (Px.isNotNull() && Ax.isNotNull())
+  {
+    osqp_update_P_A(
+        work,
+        as<NumericVector>(Px.get()).begin(),
+        Px_idx_,
+        len_Px,
+        as<NumericVector>(Ax.get()).begin(),
+        Ax_idx_,
+        len_Ax);
   }
-
-
 }
-
 
 void extractMatrixData_new(arma::sp_mat &sm, std::vector<c_int> &iout, std::vector<c_int> &pout, std::vector<c_float> &xout)
 {
@@ -330,7 +333,7 @@ void extractMatrixData_new(arma::sp_mat &sm, std::vector<c_int> &iout, std::vect
   return;
 }
 
-void extractMatrixData(const S4& mat, std::vector<c_int>& iout, std::vector<c_int>& pout, std::vector<c_float>& xout)
+void extractMatrixData(const S4 &mat, std::vector<c_int> &iout, std::vector<c_int> &pout, std::vector<c_float> &xout)
 {
   IntegerVector i = mat.slot("i");
   IntegerVector p = mat.slot("p");
@@ -346,8 +349,7 @@ void extractMatrixData(const S4& mat, std::vector<c_int>& iout, std::vector<c_in
   return;
 }
 
-
-void translateSettings(OSQPSettings* settings, const List& pars)
+void translateSettings(OSQPSettings *settings, const List &pars)
 {
 
   CharacterVector nms(pars.names());
@@ -378,7 +380,6 @@ void translateSettings(OSQPSettings* settings, const List& pars)
     else if (nm == "adaptive_rho_tolerance")
       settings->adaptive_rho_tolerance = as<c_float>(pars[i]);
 
-
     else if (nm == "linsys_solver")
       settings->linsys_solver = (linsys_solver_type)as<c_int>(pars[i]);
     else if (nm == "polish_refine_iter")
@@ -394,7 +395,6 @@ void translateSettings(OSQPSettings* settings, const List& pars)
     else if (nm == "adaptive_rho_interval")
       settings->adaptive_rho_interval = as<c_int>(pars[i]);
 
-
     else if (nm == "polish")
       settings->polish = as<c_int>(pars[i]);
     else if (nm == "verbose")
@@ -408,10 +408,9 @@ void translateSettings(OSQPSettings* settings, const List& pars)
   return;
 }
 
-
 void osqpUpdateSettings(SEXP workPtr, SEXP val, std::string nm)
 {
-  auto work = as<Rcpp::XPtr<OSQPWorkspace, Rcpp::PreserveStorage, mycleanup> >(workPtr);
+  auto work = as<Rcpp::XPtr<OSQPWorkspace, Rcpp::PreserveStorage, mycleanup>>(workPtr);
 
   if (nm == "check_termination")
     osqp_update_check_termination(work, as<c_int>(val));
@@ -443,13 +442,11 @@ void osqpUpdateSettings(SEXP workPtr, SEXP val, std::string nm)
     osqp_update_eps_rel(work, as<c_float>(val));
   else
     Rcout << "Param " + nm + " cannot be updated live" << std::endl;
-
 }
-
 
 SEXP osqpGetData(SEXP workPtr, std::string nm)
 {
-  auto work = as<Rcpp::XPtr<OSQPWorkspace, Rcpp::PreserveStorage, mycleanup> >(workPtr);
+  auto work = as<Rcpp::XPtr<OSQPWorkspace, Rcpp::PreserveStorage, mycleanup>>(workPtr);
 
   if (nm == "P")
     return toDgCMat(work->data->P);
@@ -475,11 +472,10 @@ SEXP osqpGetData(SEXP workPtr, std::string nm)
     return q;
   }
 
-
   return R_NilValue;
 }
 
-S4 toDgCMat(csc* inmat)
+S4 toDgCMat(csc *inmat)
 {
   S4 m("dgCMatrix");
 
@@ -487,49 +483,46 @@ S4 toDgCMat(csc* inmat)
   int nr = inmat->m;
   int nc = inmat->n;
 
-  NumericVector x(inmat->x, inmat->x+nnz);
-  IntegerVector i(inmat->i, inmat->i+nnz);
-  IntegerVector p(inmat->p, inmat->p+nc+1);
+  NumericVector x(inmat->x, inmat->x + nnz);
+  IntegerVector i(inmat->i, inmat->i + nnz);
+  IntegerVector p(inmat->p, inmat->p + nc + 1);
   IntegerVector dim = IntegerVector::create(nr, nc);
 
-
-  m.slot("i")   = i;
-  m.slot("p")   = p;
-  m.slot("x")   = x;
+  m.slot("i") = i;
+  m.slot("p") = p;
+  m.slot("x") = x;
   m.slot("Dim") = dim;
 
   return m;
 }
 
-
-void mycleanup (OSQPWorkspace* x)
+void mycleanup(OSQPWorkspace *x)
 {
   osqp_cleanup(x);
 }
 
-
-
 void osqpWarmStart(SEXP workPtr, Rcpp::Nullable<NumericVector> x, Rcpp::Nullable<NumericVector> y)
 {
-  auto work = as<Rcpp::XPtr<OSQPWorkspace, Rcpp::PreserveStorage, mycleanup> >(workPtr);
+  auto work = as<Rcpp::XPtr<OSQPWorkspace, Rcpp::PreserveStorage, mycleanup>>(workPtr);
 
-  if(x.isNull() && y.isNull())
+  if (x.isNull() && y.isNull())
   {
     return;
-  } else if (x.isNotNull() && y.isNotNull())
+  }
+  else if (x.isNotNull() && y.isNotNull())
   {
-    osqp_warm_start(work, as<NumericVector>(x.get()).begin(),as<NumericVector>(y.get()).begin());
-
-
-  } else if (x.isNotNull())
+    osqp_warm_start(work, as<NumericVector>(x.get()).begin(), as<NumericVector>(y.get()).begin());
+  }
+  else if (x.isNotNull())
   {
     osqp_warm_start_x(work, as<NumericVector>(x.get()).begin());
-  } else {
+  }
+  else
+  {
     osqp_warm_start_y(work, as<NumericVector>(y.get()).begin());
   }
   return;
 }
-
 
 arma::vec psi(arma::vec z, double k)
 {
@@ -600,6 +593,7 @@ List DCCP_ROC(arma::mat X, arma::vec Y, arma::vec beta_init, double b_init, doub
   arma::mat A_rm = A_rt;
   arma::mat A_ll = arma::zeros(1, p + 1);
   arma::mat A_rl = -b_vec.elem(arma::find(indicator > 0));
+  A_rl.reshape(1, n_sub);
 
   arma::mat A_dense = arma::join_cols(arma::join_rows(A_lt, A_rt), arma::join_rows(A_lm, A_rm), arma::join_rows(A_ll, A_rl));
   arma::sp_mat A(A_dense);
@@ -615,10 +609,14 @@ List DCCP_ROC(arma::mat X, arma::vec Y, arma::vec beta_init, double b_init, doub
 
   SEXP problem = osqpSetup_new(P, q, A, l, u);
   List res = osqpSolve(problem);
-  if (NumericVector::is_na(res[0]))
-    stop("bug");
+  double prob_status = as<double>(res["status"]);
+  if (prob_status != 1.0)
+  {
+    return List::create(Named("beta") = NA_REAL,
+                        Named("b") = NA_REAL);
+  }
 
-  arma::vec osqp_x = as<NumericVector>(res[0]);
+  arma::vec osqp_x = as<NumericVector>(res["x"]);
   arma::vec beta_after = osqp_x.subvec(0, p - 1);
   double b_after = osqp_x(p);
 
@@ -653,7 +651,7 @@ List DCCP_ROC(arma::mat X, arma::vec Y, arma::vec beta_init, double b_init, doub
     P_diag.subvec(p, p + n_sub) *= 0;
     P = convert_to_diag_sp(P_diag);
 
-    // linear vector q 
+    // linear vector q
     q_u.set_size(p + n_sub + 1);
     q_u.ones();
     q_u.subvec(p + 1, p + n_sub) = (Y_sub > 0) * 1.0;
@@ -666,6 +664,7 @@ List DCCP_ROC(arma::mat X, arma::vec Y, arma::vec beta_init, double b_init, doub
     A_rm = A_rt;
     A_ll = arma::zeros(1, p + 1);
     A_rl = -b_vec.elem(arma::find(indicator > 0));
+    A_rl.reshape(1, n_sub);
 
     A_dense = arma::join_cols(arma::join_rows(A_lt, A_rt), arma::join_rows(A_lm, A_rm), arma::join_rows(A_ll, A_rl));
     A = arma::conv_to<arma::sp_mat>::from(A_dense);
@@ -683,10 +682,14 @@ List DCCP_ROC(arma::mat X, arma::vec Y, arma::vec beta_init, double b_init, doub
 
     problem = osqpSetup_new(P, q, A, l, u);
     res = osqpSolve(problem);
-    if (NumericVector::is_na(res[0]))
-      stop("bug");
+    prob_status = as<double>(res["status"]);
+    if (prob_status != 1.0)
+    {
+      return List::create(Named("beta") = NA_REAL,
+                          Named("b") = NA_REAL);
+    }
 
-    osqp_x = as<NumericVector>(res[0]);
+    osqp_x = as<NumericVector>(res["x"]);
     beta_after = osqp_x.subvec(0, p - 1);
     b_after = osqp_x(p);
 
