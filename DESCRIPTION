@@ -1,6 +1,6 @@
 Package: imblearn
 Type: Package
-Title: Fast and scalable learning for imbalanced data using 'DCCP' algorithm
+Title: Fast and scalable learning for imbalanced data
 Version: 0.0.1
 Date: 2023-01-18
 Author: Renxiong Liu
