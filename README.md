@@ -13,4 +13,4 @@ devtools::install_github("renxiongliu/imblearn")
 Note that the installation above requires using R package [devtools](https://CRAN.R-project.org/package=devtools)
 (which can be installed using `install.packages("devtools")`).
 
-Please check the accompanying [vignette](https://github.com/renxiongliu/l2path/blob/main/vignettes/vignette.pdf) on how to use the `imblearn` package.
+Please check the accompanying [vignette](https://github.com/renxiongliu/imblearn/blob/main/vignettes/vignette.pdf) on how to use the `imblearn` package.
