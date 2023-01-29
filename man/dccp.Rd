@@ -9,23 +9,33 @@ dccp(
   Y,
   beta_init,
   b_init,
-  gamma,
-  psi_k,
-  max_iter_num,
-  max_rel_gap,
+  gamma = 0.001,
+  psi_k = 10,
+  max_iter_num = 25,
+  max_rel_gap = 5 * 0.001,
   metrics = "ROC"
 )
 }
 \arguments{
 \item{X}{A \eqn{n \times p} feature matrix.}
 
-\item{Y}{A \eqn{n \times 1} binary vector.}
+\item{Y}{A \eqn{n \times 1} binary vector with value -1 and +1.}
 
 \item{beta_init}{Slope coefficient for initialized discriminant function.}
 
 \item{b_init}{Intercept coefficient for initialized discriminant function.}
 
-\item{metrics}{Specify the metric to improve for initialized linear classifier.}
+\item{gamma}{hyperparameter value of regularizer in the object function.}
+
+\item{psi_k}{the hyperparameter in psi function: psi(x, psi_k) = min(1, max(0, 1-k*x))}
+
+\item{max_iter_num}{maximal number of iterations in DCCP iterations.}
+
+\item{max_rel_gap}{relative tolerance of object function value improvement during iteration.}
+
+\item{metrics}{Specify the metric to improve for initialized linear classifier
+"ROC" means optimizing type I/II error while "PR" means optimize
+recall/precision.}
 }
 \value{
 beta: Generated slope coefficient

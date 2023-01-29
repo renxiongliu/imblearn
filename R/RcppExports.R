@@ -5,3 +5,7 @@ DCCP_ROC <- function(X, Y, beta_init, b_init, gamma, psi_k, max_iter_num, max_re
     .Call(`_imblearn_DCCP_ROC`, X, Y, beta_init, b_init, gamma, psi_k, max_iter_num, max_rel_gap)
 }
 
+DCCP_PR <- function(X, Y, beta_init, b_init, gamma, psi_k, max_iter_num, max_rel_gap) {
+    .Call(`_imblearn_DCCP_PR`, X, Y, beta_init, b_init, gamma, psi_k, max_iter_num, max_rel_gap)
+}
+

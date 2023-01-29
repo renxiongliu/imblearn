@@ -7,7 +7,7 @@ Author: Renxiong Liu
 Maintainer: Renxiong Liu <liu.6732@osu.edu>	
 Description: Optimize type I/type II error, recall/precision metrics by fast and scalable methods. 
 License: Apache License 2.0 | file LICENSE
-Imports: Rcpp (>= 0.12.14)
+Imports: Rcpp (>= 0.12.14), LiblineaR
 LinkingTo: Rcpp, RcppArmadillo
 RoxygenNote: 7.2.3
 NeedsCompilation: yes

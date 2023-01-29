@@ -29,9 +29,28 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// DCCP_PR
+List DCCP_PR(arma::mat X, arma::vec Y, arma::vec beta_init, double b_init, double gamma, double psi_k, int max_iter_num, double max_rel_gap);
+RcppExport SEXP _imblearn_DCCP_PR(SEXP XSEXP, SEXP YSEXP, SEXP beta_initSEXP, SEXP b_initSEXP, SEXP gammaSEXP, SEXP psi_kSEXP, SEXP max_iter_numSEXP, SEXP max_rel_gapSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::mat >::type X(XSEXP);
+    Rcpp::traits::input_parameter< arma::vec >::type Y(YSEXP);
+    Rcpp::traits::input_parameter< arma::vec >::type beta_init(beta_initSEXP);
+    Rcpp::traits::input_parameter< double >::type b_init(b_initSEXP);
+    Rcpp::traits::input_parameter< double >::type gamma(gammaSEXP);
+    Rcpp::traits::input_parameter< double >::type psi_k(psi_kSEXP);
+    Rcpp::traits::input_parameter< int >::type max_iter_num(max_iter_numSEXP);
+    Rcpp::traits::input_parameter< double >::type max_rel_gap(max_rel_gapSEXP);
+    rcpp_result_gen = Rcpp::wrap(DCCP_PR(X, Y, beta_init, b_init, gamma, psi_k, max_iter_num, max_rel_gap));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_imblearn_DCCP_ROC", (DL_FUNC) &_imblearn_DCCP_ROC, 8},
+    {"_imblearn_DCCP_PR", (DL_FUNC) &_imblearn_DCCP_PR, 8},
     {NULL, NULL, 0}
 };
 

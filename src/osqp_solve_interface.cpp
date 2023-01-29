@@ -612,8 +612,8 @@ List DCCP_ROC(arma::mat X, arma::vec Y, arma::vec beta_init, double b_init, doub
   double prob_status = as<double>(res["status"]);
   if (prob_status != 1.0)
   {
-    return List::create(Named("beta") = NA_REAL,
-                        Named("b") = NA_REAL);
+    return List::create(Named("beta") = beta_before,
+                        Named("b") = b_before);
   }
 
   arma::vec osqp_x = as<NumericVector>(res["x"]);
@@ -653,7 +653,7 @@ List DCCP_ROC(arma::mat X, arma::vec Y, arma::vec beta_init, double b_init, doub
 
     // linear vector q
     q_u.set_size(p + n_sub + 1);
-    q_u.ones();
+    q_u.zeros();
     q_u.subvec(p + 1, p + n_sub) = (Y_sub > 0) * 1.0;
     q = arma::conv_to<arma::vec>::from(q_u);
 
@@ -685,8 +685,8 @@ List DCCP_ROC(arma::mat X, arma::vec Y, arma::vec beta_init, double b_init, doub
     prob_status = as<double>(res["status"]);
     if (prob_status != 1.0)
     {
-      return List::create(Named("beta") = NA_REAL,
-                          Named("b") = NA_REAL);
+      return List::create(Named("beta") = beta_before,
+                          Named("b") = b_before);
     }
 
     osqp_x = as<NumericVector>(res["x"]);
@@ -704,4 +704,190 @@ List DCCP_ROC(arma::mat X, arma::vec Y, arma::vec beta_init, double b_init, doub
 
   return List::create(Named("beta") = beta_after,
                       Named("b") = b_after);
+}
+
+// [[Rcpp::export]]
+List DCCP_PR(arma::mat X, arma::vec Y, arma::vec beta_init, double b_init, double gamma, double psi_k, int max_iter_num, double max_rel_gap)
+{
+  int n = X.n_rows;
+  int p = X.n_cols;
+  arma::mat only_ones(n, 1, arma::fill::ones);
+  arma::mat aug_X = arma::join_rows(X, only_ones);
+
+  arma::uvec Y_pos_indicator_u = (Y > 0) * 1.0;
+  arma::vec Y_pos_indicator = arma::conv_to<arma::vec>::from(Y_pos_indicator_u);
+
+  arma::uvec Y_neg_indicator_u = (Y < 0) * 1.0;
+  arma::vec Y_neg_indicator = arma::conv_to<arma::vec>::from(Y_neg_indicator_u);
+
+  int n_pos = arma::sum(Y > 0);
+  int n_neg = n - n_pos;
+
+  arma::vec beta_before = beta_init;
+  double b_before = b_init;
+
+  arma::vec margin_before = Y % (X * beta_before + b_before);
+  arma::vec psi_value_before = psi(margin_before, psi_k);
+  arma::vec psi_value_before_pos = psi_value_before % Y_pos_indicator;
+  arma::vec psi_value_before_neg = psi_value_before % Y_neg_indicator;
+
+  double p0 = 1;
+  if (n_pos - arma::sum(psi_value_before_pos) + arma::sum(psi_value_before_neg) != 0)
+  {
+    p0 = (n_pos - arma::sum(psi_value_before_pos)) / (n_pos - arma::sum(psi_value_before_pos) + arma::sum(psi_value_before_neg));
+  }
+
+  if (p0 <= n_pos / n)
+  {
+    arma::vec beta_after(p);
+    beta_after.zeros();
+    double b_after = 1;
+
+    return List::create(Named("beta") = beta_after,
+                        Named("b") = b_after);
+  }
+
+  double fun_value_before = arma::sum(psi_value_before_pos) / n + gamma / 2 * arma::sum(arma::square(beta_before));
+
+  arma::uvec indicator_u = (margin_before > 0) * 1.0;
+  arma::vec indicator = arma::conv_to<arma::vec>::from(indicator_u);
+  arma::uvec b_vec_u = (1 - p0) * (Y > 0) + p0 * (Y < 0); // TODO: check this
+  arma::vec b_vec = arma::conv_to<arma::vec>::from(b_vec_u);
+  double c_value = arma::sum(b_vec % (1.0 - indicator));
+
+  arma::mat X_sub = X.rows(arma::find(indicator > 0));
+  arma::vec Y_sub = Y.elem(arma::find(indicator > 0));
+  arma::mat aug_X_sub = aug_X.rows(arma::find(indicator > 0));
+  int n_sub = X_sub.n_rows;
+
+  // diagonal matrix P
+  arma::vec P_diag(p + n_sub + 1, arma::fill::ones);
+  P_diag.subvec(0, p - 1) *= n * gamma;
+  P_diag.subvec(p, p + n_sub) *= 0;
+  arma::sp_mat P = convert_to_diag_sp(P_diag);
+
+  // linear vector q
+  arma::uvec q_u(p + n_sub + 1, arma::fill::zeros);
+  q_u.subvec(p + 1, p + n_sub) = (Y_sub > 0) * 1.0;
+  arma::vec q = arma::conv_to<arma::vec>::from(q_u);
+
+  // coef matrix A
+  arma::mat A_lt = psi_k * (aug_X_sub.each_col() % Y_sub);
+  arma::mat A_rt = arma::eye(n_sub, n_sub);
+  arma::mat A_lm = arma::zeros(n_sub, p + 1);
+  arma::mat A_rm = A_rt;
+  arma::mat A_ll = arma::zeros(1, p + 1);
+  arma::mat A_rl = -b_vec.elem(arma::find(indicator > 0));
+  A_rl.reshape(1, n_sub);
+
+  arma::mat A_dense = arma::join_cols(arma::join_rows(A_lt, A_rt), arma::join_rows(A_lm, A_rm), arma::join_rows(A_ll, A_rl));
+  arma::sp_mat A(A_dense);
+
+  // lower bound vector l
+  arma::vec l(2 * n_sub + 1, arma::fill::ones);
+  l.subvec(n_sub, 2 * n_sub - 1) *= 0;
+  l(2 * n_sub) = c_value - (1 - p0) * n_pos;
+
+  // upper bound vector u
+  arma::vec u(2 * n_sub + 1, arma::fill::ones);
+  u *= OSQP_INFTY;
+
+  SEXP problem = osqpSetup_new(P, q, A, l, u);
+  List res = osqpSolve(problem);
+  double prob_status = as<double>(res["status"]);
+  if (prob_status != 1.0)
+  {
+    return List::create(Named("beta") = beta_before,
+                        Named("b") = b_before);
+  }
+
+  arma::vec osqp_x = as<NumericVector>(res["x"]);
+  arma::vec beta_after = osqp_x.subvec(0, p - 1);
+  double b_after = osqp_x(p);
+
+  arma::vec margin_after = Y % (X * beta_after + b_after);
+  arma::vec psi_value_after = psi(margin_after, psi_k);
+  arma::vec psi_value_after_pos = psi_value_after % Y_pos_indicator;
+  arma::vec psi_value_after_neg = psi_value_after % Y_neg_indicator;
+  double fun_value_after = arma::sum(psi_value_after_pos) / n + gamma / 2 * arma::sum(arma::square(beta_after));
+
+  int num_iteration = 1;
+
+  while ((std::abs(fun_value_after - fun_value_before) / std::abs(fun_value_before) > max_rel_gap) && (num_iteration < max_iter_num))
+  {
+    beta_before = beta_after;
+    b_before = b_after;
+    fun_value_before = fun_value_after;
+    margin_before = margin_after;
+
+    indicator_u = (margin_before > 0) * 1.0;
+    indicator = arma::conv_to<arma::vec>::from(indicator_u);
+    c_value = arma::sum(b_vec % (1.0 - indicator));
+
+    X_sub = X.rows(arma::find(indicator > 0));
+    Y_sub = Y.elem(arma::find(indicator > 0));
+    aug_X_sub = aug_X.rows(arma::find(indicator > 0));
+    n_sub = X_sub.n_rows;
+
+    // diagonal matrix P
+    P_diag.set_size(p + n_sub + 1);
+    P_diag.ones();
+    P_diag.subvec(0, p - 1) *= n * gamma;
+    P_diag.subvec(p, p + n_sub) *= 0;
+    P = convert_to_diag_sp(P_diag);
+
+    // linear vector q
+    q_u.set_size(p + n_sub + 1);
+    q_u.zeros();
+    q_u.subvec(p + 1, p + n_sub) = (Y_sub > 0) * 1.0;
+    q = arma::conv_to<arma::vec>::from(q_u);
+
+    // coef matrix A
+    A_lt = psi_k * (aug_X_sub.each_col() % Y_sub);
+    A_rt = arma::eye(n_sub, n_sub);
+    A_lm = arma::zeros(n_sub, p + 1);
+    A_rm = A_rt;
+    A_ll = arma::zeros(1, p + 1);
+    A_rl = -b_vec.elem(arma::find(indicator > 0));
+    A_rl.reshape(1, n_sub);
+
+    A_dense = arma::join_cols(arma::join_rows(A_lt, A_rt), arma::join_rows(A_lm, A_rm), arma::join_rows(A_ll, A_rl));
+    A = arma::conv_to<arma::sp_mat>::from(A_dense);
+
+    // lower bound vector l
+    l.set_size(2 * n_sub + 1);
+    l.ones();
+    l.subvec(n_sub, 2 * n_sub - 1) *= 0;
+    l(2 * n_sub) = c_value - (1 - p0) * n_pos;
+
+    // upper bound vector u
+    u.set_size(2 * n_sub + 1);
+    u.ones();
+    u *= OSQP_INFTY;
+
+    problem = osqpSetup_new(P, q, A, l, u);
+    res = osqpSolve(problem);
+    prob_status = as<double>(res["status"]);
+    if (prob_status != 1.0)
+    {
+      return List::create(Named("beta") = beta_before,
+                          Named("b") = b_before);
+    }
+
+    osqp_x = as<NumericVector>(res["x"]);
+    beta_after = osqp_x.subvec(0, p - 1);
+    b_after = osqp_x(p);
+
+    margin_after = Y % (X * beta_after + b_after);
+    psi_value_after = psi(margin_after, psi_k);
+    psi_value_after_pos = psi_value_after % Y_pos_indicator;
+    psi_value_after_neg = psi_value_after % Y_neg_indicator;
+    fun_value_after = arma::sum(psi_value_after_pos) / n + gamma / 2 * arma::sum(arma::square(beta_after));
+
+    num_iteration += 1;
+  }
+
+  return List::create(Named("beta") = beta_after,
+                      Named("b") = b_after);
+
 }
