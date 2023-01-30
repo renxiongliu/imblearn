@@ -6,7 +6,7 @@ The `imblearn` package contains implementation of constrained $\psi$-learning me
 2. [Liu and Zhu (2022): *classification for imbalanced dataset*](https://openreview.net/pdf?id=Ijq1_a6DESm).
 
 
-To install `l2path` from [github](http://github.com), type in R console
+To install `imblearn` from [github](http://github.com), type in R console
 ```R
 devtools::install_github("renxiongliu/imblearn")
 ```
